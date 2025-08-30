@@ -1,6 +1,0 @@
-fastapi==0.111.*
-uvicorn==0.29.*
-chromadb==0.4.*
-openai==1.*
-python-dotenv
-pandas

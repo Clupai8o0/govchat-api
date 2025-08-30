@@ -29,14 +29,18 @@ async def query_datasets(q: str = Query(..., description="Natural language query
         q: Natural language query string
         
     Returns:
-        JSON with top-4 matching datasets
+        JSON with top-4 matching datasets and friendly GPT response
     """
     try:
         # Search for similar datasets
         hits = retrieval.search_similar_datasets(q, top_k=4)
         
+        # Generate friendly response
+        friendly_response = retrieval.generate_friendly_response(q, hits)
+        
         return {
             "query": q,
+            "response": friendly_response,
             "hits": hits,
             "count": len(hits)
         }

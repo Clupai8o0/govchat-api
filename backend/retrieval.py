@@ -39,6 +39,43 @@ def embed_text(text: str) -> List[float]:
         raise Exception(f"Failed to create embedding: {e}")
 
 
+def generate_friendly_response(query: str, hits: List[Dict[str, Any]]) -> str:
+    """Generate a friendly GPT response for the query and results."""
+    try:
+        # Build context from the top results
+        context_parts = []
+        for i, hit in enumerate(hits[:3], 1):  # Use top 3 for context
+            context_parts.append(f"{i}. {hit['title']} - {hit['agency']}")
+        
+        context = "\n".join(context_parts)
+        
+        # Create GPT prompt
+        prompt = f"""You are a helpful government data assistant. A user asked: "{query}"
+
+I found these relevant datasets:
+{context}
+
+Write a brief, friendly response (2-3 sentences) that:
+1. Acknowledges their query
+2. Mentions how many datasets were found
+3. Briefly describes what kind of data is available
+
+Keep it conversational and helpful."""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=150
+        )
+        
+        return response.choices[0].message.content.strip()
+        
+    except Exception as e:
+        # Fallback response if GPT fails
+        return f"I found {len(hits)} datasets related to '{query}'. Here are the most relevant results:"
+
+
 def search_similar_datasets(query_text: str, top_k: int = 4) -> List[Dict[str, Any]]:
     """
     Search for datasets similar to query text.

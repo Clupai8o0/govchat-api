@@ -3,7 +3,11 @@ Vector search functions for dataset retrieval.
 """
 
 import os
-from typing import List, Dict, Any
+import json
+import time
+import re
+import uuid
+from typing import List, Dict, Any, Optional
 import chromadb
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -158,6 +162,165 @@ Keep it conversational and helpful."""
     except Exception as e:
         # Fallback response if GPT fails
         return f"I found {len(hits)} datasets similar to '{dataset_id}'. These datasets share related themes and might be useful for your analysis:"
+
+
+def extract_sources(hits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Extract clean source list from hits."""
+    sources = []
+    for hit in hits:
+        source = {
+            "title": hit.get("title", ""),
+            "agency": hit.get("agency", ""),
+            "api_url": hit.get("api_url", ""),
+            "similarity": round(hit.get("similarity_score", 0.0), 3)
+        }
+        sources.append(source)
+    return sources
+
+
+def detect_numeric_claims(text: str) -> List[str]:
+    """Detect numeric claims in text (for future numeric mode)."""
+    # Simple regex for numbers with optional units
+    numeric_pattern = r'\b\d+(?:\.\d+)?(?:\s*[%$]|\s*(?:million|billion|thousand|index|rate|percent))\b'
+    claims = re.findall(numeric_pattern, text, re.IGNORECASE)
+    return claims
+
+
+def calculate_trust_score(
+    answer: str, 
+    hits: List[Dict[str, Any]], 
+    sources: List[Dict[str, Any]],
+    metadata_only: bool = True
+) -> Dict[str, Any]:
+    """
+    Calculate trust score using geometric blend of factors.
+    
+    Returns trust object with score, factors, checks, and audit_id.
+    """
+    # Factor weights (sum to 1.0)
+    weights = {
+        "grounding": 0.30,
+        "provenance": 0.20, 
+        "retrieval": 0.20,
+        "verification": 0.20,
+        "recency": 0.10
+    }
+    
+    # Calculate individual factors
+    factors = {}
+    
+    # Grounding (g): 1.0 if answer uses only metadata, 0.0 if fabricated
+    numeric_claims = detect_numeric_claims(answer)
+    if metadata_only and len(numeric_claims) > 0:
+        factors["grounding"] = 0.0  # Numbers detected in metadata-only mode
+    else:
+        factors["grounding"] = 1.0  # Clean metadata-only answer
+    
+    # Provenance (p): 1.0 if sources exist with valid items
+    if sources and len(sources) > 0 and sources[0].get("title"):
+        factors["provenance"] = 1.0
+    else:
+        factors["provenance"] = 0.0
+    
+    # Retrieval (r): max similarity among hits, clamped at 0.90 -> 1.0
+    if hits and len(hits) > 0:
+        max_sim = max(hit.get("similarity_score", 0.0) for hit in hits)
+        factors["retrieval"] = min(1.0, max_sim / 0.90) if max_sim >= 0.90 else max_sim
+    else:
+        factors["retrieval"] = 0.0
+    
+    # Verification (v): 1.0 in metadata-only mode
+    if metadata_only:
+        factors["verification"] = 1.0
+    else:
+        # Future: implement numeric verification
+        factors["verification"] = 0.0
+    
+    # Recency (c): 1.0 for now (no freshness tracking yet)
+    factors["recency"] = 1.0
+    
+    # Clamp all factors to [0,1]
+    for key in factors:
+        factors[key] = max(0.0, min(1.0, factors[key]))
+    
+    # Calculate geometric mean: score = Π (factor^weight)
+    score = 1.0
+    factor_list = []
+    for factor_name, weight in weights.items():
+        factor_value = factors[factor_name]
+        score *= (factor_value ** weight)
+        factor_list.append({"name": factor_name, "value": round(factor_value, 3)})
+    
+    # Round final score to 3 decimals
+    score = round(score, 3)
+    
+    # Checks (empty for metadata-only mode)
+    checks = []
+    
+    # Generate audit ID
+    audit_id = str(uuid.uuid4())[:8]
+    
+    return {
+        "score": score,
+        "factors": factor_list,
+        "checks": checks,
+        "audit_id": audit_id
+    }
+
+
+def create_audit_record(
+    audit_id: str,
+    query: str,
+    answer: str,
+    hits: List[Dict[str, Any]],
+    trust: Dict[str, Any],
+    extra: Optional[Dict[str, Any]] = None
+) -> None:
+    """Create and persist audit record."""
+    audit_record = {
+        "audit_id": audit_id,
+        "timestamp": int(time.time()),
+        "query": query,
+        "answer": answer,
+        "raw_hits": hits,
+        "trust": trust,
+        "extra": extra or {}
+    }
+    
+    # Ensure audit directory exists
+    os.makedirs("audit_logs", exist_ok=True)
+    
+    # Save audit record
+    audit_file = f"audit_logs/{audit_id}.json"
+    with open(audit_file, "w") as f:
+        json.dump(audit_record, f, indent=2)
+
+
+def get_audit_record(audit_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieve audit record by ID."""
+    audit_file = f"audit_logs/{audit_id}.json"
+    try:
+        with open(audit_file, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return None
+
+
+def enforce_metadata_grounding(answer: str, hits: List[Dict[str, Any]]) -> str:
+    """
+    Enforce grounding rules by checking answer against metadata.
+    Strip or replace problematic content.
+    """
+    # Remove explicit numbers in metadata-only mode
+    # Keep qualitative terms like "latest", "recent", "comprehensive"
+    cleaned_answer = re.sub(
+        r'\b\d+(?:\.\d+)?(?:\s*[%$]|\s*(?:million|billion|thousand))\b',
+        '[data available]',
+        answer,
+        flags=re.IGNORECASE
+    )
+    
+    return cleaned_answer
 
 
 def find_similar_by_id(dataset_id: str, top_k: int = 3) -> List[Dict[str, Any]]:

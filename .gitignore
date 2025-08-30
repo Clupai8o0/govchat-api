@@ -1,3 +1,6 @@
 .env
 __pycache__
 */__pycache__
+*/audit_logs
+/backend/vector_store
+/backend/audit_logs

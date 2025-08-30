@@ -3,6 +3,7 @@ FastAPI server for dataset retrieval API.
 """
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any
 import retrieval
 
@@ -11,6 +12,20 @@ app = FastAPI(
     title="Dataset RAG API",
     description="Retrieval-Augmented Generation API for government datasets",
     version="1.0.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000", 
+        "https://localhost:3000",
+        "https://127.0.0.1:3000"
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 

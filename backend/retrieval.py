@@ -48,7 +48,7 @@ def generate_friendly_response(query: str, hits: List[Dict[str, Any]]) -> str:
     try:
         # Build context from the top results
         context_parts = []
-        for i, hit in enumerate(hits[:3], 1):  # Use top 3 for context
+        for i, hit in enumerate(hits, 1):  # Use top 3 for context
             context_parts.append(f"{i}. {hit['title']} - {hit['agency']}")
         
         context = "\n".join(context_parts)

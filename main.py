@@ -186,8 +186,19 @@ with col_chat:
         vs: FAISS = st.session_state["vectorstore"]
         docs_and_scores = vs.similarity_search_with_score(user_q, k=top_k)
         docs: List[Document] = [d for d, _ in docs_and_scores]
-        sims: List[float] = [float(max(0.0, min(1.0, 1.0 - (s / 100.0)))) if s > 1 else 0.75 for _, s in docs_and_scores]
-        # Note: FAISS returns distances; the quick hack above normalizes to ~similarity for demo
+        
+        # Convert FAISS L2 distances to similarities (more robust approach)
+        # For normalized embeddings, L2 distance relates to cosine similarity as: cos_sim = 1 - (L2_dist^2 / 2)
+        sims: List[float] = []
+        for _, distance in docs_and_scores:
+            # Ensure distance is non-negative and convert to similarity
+            distance = max(0.0, float(distance))
+            # Convert L2 distance to approximate cosine similarity
+            similarity = max(0.0, 1.0 - (distance * distance / 2.0))
+            similarity = min(1.0, similarity)  # Clamp to [0, 1]
+            sims.append(similarity)
+        
+        # Note: FAISS returns L2 distances; converted to cosine similarity approximation
 
         contexts = []
         sources = []

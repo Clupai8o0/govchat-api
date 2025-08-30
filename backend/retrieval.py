@@ -65,13 +65,18 @@ def search_similar_datasets(query_text: str, top_k: int = 4) -> List[Dict[str, A
         # Format results
         hits = []
         for i in range(len(results["ids"][0])):
+            # Convert ChromaDB distance to similarity score
+            distance = max(0.0, float(results["distances"][0][i]))
+            # For normalized embeddings: cosine_similarity ≈ 1 - (L2_distance² / 2)
+            similarity_score = max(0.0, min(1.0, 1.0 - (distance * distance / 2.0)))
+            
             hit = {
                 "id": results["ids"][0][i],
                 "title": results["metadatas"][0][i]["title"],
                 "description": results["metadatas"][0][i]["description"],
                 "agency": results["metadatas"][0][i]["agency"],
                 "api_url": results["metadatas"][0][i]["api_url"],
-                "similarity_score": 1.0 - results["distances"][0][i]  # Convert distance to similarity
+                "similarity_score": similarity_score
             }
             hits.append(hit)
         
@@ -128,6 +133,11 @@ def find_similar_by_id(dataset_id: str, top_k: int = 3) -> List[Dict[str, Any]]:
             # Stop if we have enough results
             if len(hits) >= top_k:
                 break
+            
+            # Convert ChromaDB distance to similarity score
+            distance = max(0.0, float(results["distances"][0][i]))
+            # For normalized embeddings: cosine_similarity ≈ 1 - (L2_distance² / 2)
+            similarity_score = max(0.0, min(1.0, 1.0 - (distance * distance / 2.0)))
                 
             hit = {
                 "id": result_id,
@@ -135,7 +145,7 @@ def find_similar_by_id(dataset_id: str, top_k: int = 3) -> List[Dict[str, Any]]:
                 "description": results["metadatas"][0][i]["description"],
                 "agency": results["metadatas"][0][i]["agency"],
                 "api_url": results["metadatas"][0][i]["api_url"],
-                "similarity_score": 1.0 - results["distances"][0][i]
+                "similarity_score": similarity_score
             }
             hits.append(hit)
         

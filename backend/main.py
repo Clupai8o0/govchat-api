@@ -58,14 +58,18 @@ async def get_similar_datasets(dataset_id: str) -> Dict[str, Any]:
         dataset_id: ID of the dataset to find similar items for
         
     Returns:
-        JSON with up to 3 similar datasets
+        JSON with up to 3 similar datasets and friendly GPT response
     """
     try:
         # Find similar datasets
         hits = retrieval.find_similar_by_id(dataset_id, top_k=3)
         
+        # Generate friendly response
+        friendly_response = retrieval.generate_similar_response(dataset_id, hits)
+        
         return {
             "dataset_id": dataset_id,
+            "response": friendly_response,
             "similar": hits,
             "count": len(hits)
         }

@@ -123,6 +123,43 @@ def search_similar_datasets(query_text: str, top_k: int = 4) -> List[Dict[str, A
         raise Exception(f"Search failed: {e}")
 
 
+def generate_similar_response(dataset_id: str, hits: List[Dict[str, Any]]) -> str:
+    """Generate a friendly GPT response for similar dataset results."""
+    try:
+        # Build context from the similar results
+        context_parts = []
+        for i, hit in enumerate(hits[:3], 1):  # Use top 3 for context
+            context_parts.append(f"{i}. {hit['title']} - {hit['agency']}")
+        
+        context = "\n".join(context_parts)
+        
+        # Create GPT prompt
+        prompt = f"""You are a helpful government data assistant. A user asked for datasets similar to dataset ID: "{dataset_id}"
+
+I found these similar datasets:
+{context}
+
+Write a brief, friendly response (2-3 sentences) that:
+1. Acknowledges they're looking for similar datasets
+2. Mentions how many similar datasets were found
+3. Briefly explains what makes these datasets related or useful together
+
+Keep it conversational and helpful."""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=150
+        )
+        
+        return response.choices[0].message.content.strip()
+        
+    except Exception as e:
+        # Fallback response if GPT fails
+        return f"I found {len(hits)} datasets similar to '{dataset_id}'. These datasets share related themes and might be useful for your analysis:"
+
+
 def find_similar_by_id(dataset_id: str, top_k: int = 3) -> List[Dict[str, Any]]:
     """
     Find datasets similar to a given dataset ID.

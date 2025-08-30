@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+Fa#!/usr/bin/env python3
 """
 Gov AU Scraper — crawl Australian government sites and build a linking data graph.
 

@@ -1,4 +1,4 @@
-Fa#!/usr/bin/env python3
+# Is not really of use, because we ended up using the ABS API directly
 """
 Gov AU Scraper — crawl Australian government sites and build a linking data graph.
 

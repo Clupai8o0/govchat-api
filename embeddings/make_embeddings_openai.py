@@ -1,7 +1,7 @@
 import os, math, pickle
 import pandas as pd
 from dotenv import load_dotenv
-
+# Saves embeedings for a dataset to embeddings.pkl (which basically acts as a knowledge base)
 # --- NEW: force valid certificate bundle ---
 import certifi, httpx
 for var in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE"):

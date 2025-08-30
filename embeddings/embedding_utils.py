@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#Not needed for running the API, gives a basic understanding of the embeddings.pkl file
 """
 Simple utility script to quickly explore embeddings.pkl
 """

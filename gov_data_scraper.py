@@ -49,7 +49,7 @@ DEFAULT_USER_AGENT = (
     "GovHack-DataScraper/1.0 (+https://govhack.org; contact: team@example.com)"
 )
 
-DATA_FILE_EXTS = {".csv", ".xls", ".xlsx"}
+DATA_FILE_EXTS = {".csv", ".xls", ".xlsx", ".pdf"}
 ARCHIVE_FILE_EXTS = {".zip"}  # enable via --allow-zip
 
 HTML_MIME_TYPES = {
@@ -57,11 +57,12 @@ HTML_MIME_TYPES = {
     "application/xhtml+xml",
 }
 
-# Some common MIME types for CSV/Excel/ZIP
+# Some common MIME types for CSV/Excel/PDF/ZIP
 DATA_MIME_HINTS = {
     "text/csv": ".csv",
     "application/vnd.ms-excel": ".xls",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/pdf": ".pdf",
     "application/zip": ".zip",
 }
 
@@ -80,6 +81,7 @@ class FileHit:
     content_type: str
     content_length: Optional[int]
     discovered_at: str  # ISO timestamp
+    data_collected_date: Optional[str]  # Date when data was collected/published
 
 
 # ----------------------------- Helper Functions ----------------------------
@@ -105,7 +107,7 @@ def guess_ext_from_url(url: str) -> Optional[str]:
     for ext in sorted(DATA_FILE_EXTS | ARCHIVE_FILE_EXTS, key=len, reverse=True):
         if path.endswith(ext):
             return ext
-        # Check for patterns like /document/xlsx
+        # Check for patterns like /document/xlsx, /pdf, /csv
         if path.endswith('/' + ext.lstrip('.')):
             return ext
     return None
@@ -172,6 +174,110 @@ def extract_text(s: Optional[str]) -> str:
     return unescape((s or "").strip())
 
 
+def extract_dates(soup: BeautifulSoup, title: str, description: str) -> Optional[str]:
+    """Extract potential data collection/publication dates from page content."""
+    import re
+    from datetime import datetime
+    
+    # Common date patterns
+    date_patterns = [
+        r'\b(\d{4}[-/]\d{1,2}[-/]\d{1,2})\b',  # YYYY-MM-DD or YYYY/MM/DD
+        r'\b(\d{1,2}[-/]\d{1,2}[-/]\d{4})\b',  # DD-MM-YYYY or MM/DD/YYYY
+        r'\b(\d{4})\b',  # Just year
+        r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b',  # Month Year
+        r'\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b',  # DD Month YYYY
+    ]
+    
+    # Look for dates in various places
+    text_sources = []
+    
+    # Title and description
+    text_sources.extend([title, description])
+    
+    # Meta tags with date information
+    for name in ["date", "publication-date", "created", "modified", "dc.date", "dcterms.created", "dcterms.modified"]:
+        meta = soup.find("meta", attrs={"name": name})
+        if meta and meta.get("content"):
+            text_sources.append(meta["content"])
+    
+    # Time elements
+    for time_elem in soup.find_all("time"):
+        if time_elem.get("datetime"):
+            text_sources.append(time_elem["datetime"])
+        text_sources.append(time_elem.get_text())
+    
+    # Look for common date-related text patterns
+    for elem in soup.find_all(string=re.compile(r'(published|updated|created|collected|as at|data from|year ending)', re.I)):
+        parent = elem.parent
+        if parent:
+            text_sources.append(parent.get_text())
+    
+    # Extract dates from all sources
+    found_dates = []
+    for text in text_sources:
+        if not text:
+            continue
+        text = str(text).strip()
+        
+        for pattern in date_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            for match in matches:
+                if isinstance(match, tuple):
+                    # Handle month name patterns
+                    if len(match) == 2 and match[0].isalpha():  # Month Year
+                        try:
+                            date_obj = datetime.strptime(f"{match[0]} {match[1]}", "%B %Y")
+                            found_dates.append(date_obj.strftime("%Y-%m"))
+                        except ValueError:
+                            pass
+                    elif len(match) == 3:  # DD Month YYYY
+                        try:
+                            date_obj = datetime.strptime(f"{match[0]} {match[1]} {match[2]}", "%d %B %Y")
+                            found_dates.append(date_obj.strftime("%Y-%m-%d"))
+                        except ValueError:
+                            pass
+                else:
+                    # Handle simple date patterns
+                    date_str = match.strip()
+                    if len(date_str) == 4 and date_str.isdigit():  # Year only
+                        year = int(date_str)
+                        if 1990 <= year <= 2030:  # Reasonable year range
+                            found_dates.append(date_str)
+                    else:
+                        # Try to parse other date formats
+                        for fmt in ["%Y-%m-%d", "%Y/%m/%d", "%d-%m-%Y", "%d/%m/%Y"]:
+                            try:
+                                date_obj = datetime.strptime(date_str, fmt)
+                                found_dates.append(date_obj.strftime("%Y-%m-%d"))
+                                break
+                            except ValueError:
+                                continue
+    
+    # Return the most recent reasonable date found
+    if found_dates:
+        # Filter out future dates and very old dates
+        current_year = datetime.now().year
+        valid_dates = []
+        for date_str in found_dates:
+            try:
+                if len(date_str) == 4:  # Year only
+                    year = int(date_str)
+                    if 1990 <= year <= current_year + 1:
+                        valid_dates.append(date_str)
+                else:
+                    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                    if 1990 <= date_obj.year <= current_year + 1:
+                        valid_dates.append(date_str)
+            except ValueError:
+                continue
+        
+        if valid_dates:
+            # Return the most recent date
+            return sorted(valid_dates)[-1]
+    
+    return None
+
+
 def extract_page_metadata(soup: BeautifulSoup) -> Tuple[str, str, List[str]]:
     # Title
     title = ""
@@ -194,65 +300,52 @@ def extract_page_metadata(soup: BeautifulSoup) -> Tuple[str, str, List[str]]:
         if p:
             desc = extract_text(p.get_text(" ", strip=True))[:500]
 
-    # Tags: meta keywords, article tags, dcterms, link rel=tag, common CSS classes
+    # Tags: focus on most relevant sources only (reduced from original)
     tags: List[str] = []
 
-    def add_tags(vals: Iterable[str]):
+    def add_tags(vals: Iterable[str], max_tags: int = 10):
         for v in vals:
             v = extract_text(v)
-            if v and v.lower() not in [t.lower() for t in tags]:
+            # Filter out very short or very long tags, and limit total number
+            if v and 2 <= len(v) <= 50 and v.lower() not in [t.lower() for t in tags] and len(tags) < max_tags:
                 tags.append(v)
 
+    # Priority 1: Meta keywords (most reliable)
     meta_kw = soup.find("meta", attrs={"name": "keywords"})
     if meta_kw and meta_kw.get("content"):
-        add_tags([t for t in meta_kw["content"].split(",") if t.strip()])
+        add_tags([t.strip() for t in meta_kw["content"].split(",") if t.strip()], max_tags=5)
 
-    for prop in ["article:tag", "og:video:tag", "og:audio:tag"]:
-        for m in soup.find_all("meta", attrs={"property": prop}):
-            if m.get("content"):
-                add_tags([m["content"]])
-
-    # Dublin Core / DCTERMS
+    # Priority 2: Dublin Core subjects
     for n in ["dcterms.subject", "dc.subject"]:
         for m in soup.find_all("meta", attrs={"name": n}):
-            if m.get("content"):
-                add_tags([m["content"]])
+            if m.get("content") and len(tags) < 8:
+                add_tags([m["content"]], max_tags=8)
 
-    # link rel=tag
-    for t in soup.find_all("a", attrs={"rel": lambda v: v and "tag" in v}):
-        add_tags([t.get_text(" ", strip=True)])
+    # Priority 3: Article tags (if still room)
+    if len(tags) < 6:
+        for prop in ["article:tag"]:
+            for m in soup.find_all("meta", attrs={"property": prop}):
+                if m.get("content") and len(tags) < 8:
+                    add_tags([m["content"]], max_tags=8)
 
-    # Common tag clouds
-    for cls in ["tag", "tags", "tag-list", "keywords", "facet", "topic"]:
-        for el in soup.select(f".{cls} a, .{cls} li, .{cls} span"):
-            txt = el.get_text(" ", strip=True)
-            if txt:
-                add_tags([txt])
-
-    # Try JSON-LD
-    for s in soup.find_all("script", attrs={"type": "application/ld+json"}):
-        try:
-            data = json.loads(s.string or "")
-        except Exception:
-            continue
-        # Normalize to list
-        items = data if isinstance(data, list) else [data]
-        for it in items:
-            if not isinstance(it, dict):
+    # Priority 4: JSON-LD keywords (if still room)
+    if len(tags) < 6:
+        for s in soup.find_all("script", attrs={"type": "application/ld+json"}):
+            try:
+                data = json.loads(s.string or "")
+            except Exception:
                 continue
-            if "keywords" in it:
-                kw = it["keywords"]
-                if isinstance(kw, str):
-                    add_tags([k for k in kw.split(",") if k.strip()])
-                elif isinstance(kw, list):
-                    add_tags([str(k) for k in kw if str(k).strip()])
-            if "about" in it:
-                ab = it["about"]
-                if isinstance(ab, list):
-                    add_tags([a.get("name") if isinstance(
-                        a, dict) else str(a) for a in ab])
-                elif isinstance(ab, dict):
-                    add_tags([ab.get("name", "")])
+            # Normalize to list
+            items = data if isinstance(data, list) else [data]
+            for it in items:
+                if not isinstance(it, dict) or len(tags) >= 8:
+                    continue
+                if "keywords" in it:
+                    kw = it["keywords"]
+                    if isinstance(kw, str):
+                        add_tags([k.strip() for k in kw.split(",") if k.strip()], max_tags=8)
+                    elif isinstance(kw, list):
+                        add_tags([str(k).strip() for k in kw if str(k).strip()], max_tags=8)
 
     return title, desc, tags
 
@@ -369,6 +462,7 @@ def crawl(
 
         soup = BeautifulSoup(r.text, "html.parser")
         title, desc, tags = extract_page_metadata(soup)
+        data_date = extract_dates(soup, title, desc)
 
         page_links, data_links = discover_links(soup, base_url=url)
 
@@ -439,6 +533,7 @@ def crawl(
                 content_length=clen_int,
                 discovered_at=time.strftime(
                     "%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                data_collected_date=data_date,
             )
             files_found.append(hit)
             if len(files_found) >= max_files:
@@ -467,6 +562,7 @@ def save_results(results: List[FileHit], outfile_prefix: str) -> None:
             "content_type",
             "content_length",
             "discovered_at",
+            "data_collected_date",
         ])
         for h in results:
             w.writerow([
@@ -480,6 +576,7 @@ def save_results(results: List[FileHit], outfile_prefix: str) -> None:
                 h.content_type,
                 h.content_length if h.content_length is not None else "",
                 h.discovered_at,
+                h.data_collected_date if h.data_collected_date else "",
             ])
 
     # JSONL

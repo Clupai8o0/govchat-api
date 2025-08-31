@@ -117,6 +117,7 @@ def search_similar_datasets(query_text: str, top_k: int = 4) -> List[Dict[str, A
                 "description": results["metadatas"][0][i]["description"],
                 "agency": results["metadatas"][0][i]["agency"],
                 "api_url": results["metadatas"][0][i]["api_url"],
+                "url": results["metadatas"][0][i].get("url", ""),
                 "similarity_score": similarity_score
             }
             hits.append(hit)
@@ -172,6 +173,7 @@ def extract_sources(hits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "title": hit.get("title", ""),
             "agency": hit.get("agency", ""),
             "api_url": hit.get("api_url", ""),
+            "url": hit.get("url", ""),
             "similarity": round(hit.get("similarity_score", 0.0), 3)
         }
         sources.append(source)
@@ -382,6 +384,7 @@ def find_similar_by_id(dataset_id: str, top_k: int = 3) -> List[Dict[str, Any]]:
                 "description": results["metadatas"][0][i]["description"],
                 "agency": results["metadatas"][0][i]["agency"],
                 "api_url": results["metadatas"][0][i]["api_url"],
+                "url": results["metadatas"][0][i].get("url", ""),
                 "similarity_score": similarity_score
             }
             hits.append(hit)

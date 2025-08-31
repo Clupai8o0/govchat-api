@@ -12,9 +12,13 @@ from chromadb.config import Settings
 
 def load_data():
     """Load datasets and embeddings from files."""
-    # Load CSV data
-    df = pd.read_csv("datasets.csv")
-    print(f"Loaded {len(df)} rows from datasets.csv")
+    # Use combined dataset if it exists, otherwise fall back to original
+    if os.path.exists("combined_datasets.csv"):
+        df = pd.read_csv("combined_datasets.csv")
+        print(f"Loaded {len(df)} rows from combined_datasets.csv")
+    else:
+        df = pd.read_csv("datasets.csv")
+        print(f"Loaded {len(df)} rows from datasets.csv")
     
     # Load embeddings
     with open("embeddings.pkl", "rb") as f:
@@ -72,12 +76,19 @@ def populate_collection(collection, df, embeddings):
         ids.append(dataset_id)
         vectors.append(embeddings[dataset_id])
         documents.append(doc_text)
+        # Handle NaN values properly
+        def safe_str(value):
+            if pd.isna(value):
+                return ""
+            return str(value)
+        
         metadatas.append({
-            "title": str(row.get("title", "")),
-            "description": str(row.get("description", "")),
-            "agency": str(row.get("agency", "")),
-            "api_url": str(row.get("api_url", "")),
-            "tags": str(row.get("tags", ""))
+            "title": safe_str(row.get("title", "")),
+            "description": safe_str(row.get("description", "")),
+            "agency": safe_str(row.get("agency", "")),
+            "api_url": safe_str(row.get("api_url", "")),
+            "url": safe_str(row.get("url", "")),
+            "tags": safe_str(row.get("tags", ""))
         })
     
     # Add to collection in batch

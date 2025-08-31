@@ -135,7 +135,7 @@ def generate_similar_response(dataset_id: str, hits: List[Dict[str, Any]]) -> st
         context_parts = []
         for i, hit in enumerate(hits[:3], 1):  # Use top 3 for context
             context_parts.append(f"{i}. {hit['title']} - {hit['agency']}")
-        
+            
         context = "\n".join(context_parts)
         
         # Create GPT prompt

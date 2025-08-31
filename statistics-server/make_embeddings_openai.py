@@ -10,7 +10,7 @@ for var in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE"):
 from openai import OpenAI
 
 # --- Config ---
-CSV_PATH = "combined_datasets.csv"
+CSV_PATH = "datasets.csv"
 MODEL = "text-embedding-3-small"
 BATCH_SIZE = 128
 

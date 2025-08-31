@@ -70,8 +70,6 @@ def populate_collection(collection, df, embeddings):
             str(row.get("title", "") or ""),
             str(row.get("description", "") or ""),
             f"Agency: {row.get('agency','') or ''}",
-            f"Api Url: {row.get('api_url','') or ''}",
-            f"Collected: {row.get('collected','') or ''}",
             f"Tags: {row.get('tags','') or ''}"
         ])
         
@@ -89,7 +87,7 @@ def populate_collection(collection, df, embeddings):
             "description": safe_str(row.get("description", "")),
             "agency": safe_str(row.get("agency", "")),
             "api_url": safe_str(row.get("api_url", "")),
-            "collected": safe_str(row.get("collected", "")),
+            "url": safe_str(row.get("url", "")),
             "tags": safe_str(row.get("tags", ""))
         })
     

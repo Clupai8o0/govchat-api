@@ -4,3 +4,4 @@ chromadb==0.4.*
 openai==1.*
 python-dotenv
 pandas
+numpy<2.0

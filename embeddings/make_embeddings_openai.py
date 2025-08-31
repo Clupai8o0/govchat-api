@@ -10,7 +10,7 @@ for var in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE"):
 from openai import OpenAI
 
 # --- Config ---
-CSV_PATH = "datasets.csv"
+CSV_PATH = "combined_datasets.csv"
 MODEL = "text-embedding-3-small"
 BATCH_SIZE = 128
 
@@ -29,12 +29,15 @@ df = pd.read_csv(CSV_PATH)
 # 2) Build text input for embeddings
 def row_to_text(r):
     parts = [
-        str(r.get("title", "") or ""),
-        str(r.get("description", "") or ""),
-        f"Agency: {r.get('agency','') or ''}",
-        f"Tags: {r.get('tags','') or ''}"
+        f"Title: {str(r.get('title', '') or '')}",
+        f"Description: {str(r.get('description', '') or '')}",
+        f"Agency: {str(r.get('agency', '') or '')}",
+        f"Collected: {str(r.get('collected', '') or '')}",
+        f"Tags: {str(r.get('tags', '') or '')}"
     ]
-    return " | ".join(p.strip() for p in parts if p and str(p).strip())
+    # Filter out empty parts and join with separators
+    filtered_parts = [p.strip() for p in parts if p and str(p).strip() and not p.endswith(": ")]
+    return " | ".join(filtered_parts)
 
 df["text"] = df.apply(row_to_text, axis=1)
 df = df[df["text"].str.len() > 0].copy()

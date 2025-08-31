@@ -2,5 +2,5 @@
 __pycache__
 */__pycache__
 */audit_logs
-/backend/vector_store
-/backend/audit_logs
+/statistics-server/vector_store
+/statistics-server/audit_logs

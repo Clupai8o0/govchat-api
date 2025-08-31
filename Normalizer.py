@@ -69,20 +69,35 @@ def _infer_freq(annotations: List[Dict[str, Any]]) -> str:
 
 def _collect_tags(annotations: List[Dict[str, Any]]) -> List[str]:
     """
-    Build simple tags from annotation titles like "FREQUENCY,MEASURE,SEX_ABS,AGE"
-    and from key=value pairs "SEX_ABS=3,AGE=TOT".
+    Extract all annotation information as tags, including titles, text, and types.
     """
     tags: set[str] = set()
     for a in annotations or []:
-        t = _first(a.get("title"), a.get("text"))
-        if not t:
-            continue
-        # split on commas
-        for part in [p.strip() for p in re.split(r"[,\s]+", t) if p.strip()]:
-            # keep left-hand side if key=value, else keep the token
-            key = part.split("=")[0].strip()
-            if key and len(key) <= 64:
-                tags.add(key)
+        # Add annotation type if present
+        if a.get("type"):
+            tags.add(str(a["type"]).strip())
+        
+        # Add title content
+        title = _first(a.get("title"))
+        if title:
+            # Split comma-separated values and add each as a tag
+            for part in [p.strip() for p in title.split(",") if p.strip()]:
+                # For key=value pairs, add both the key and the full pair
+                if "=" in part:
+                    key = part.split("=")[0].strip()
+                    if key and len(key) <= 64:
+                        tags.add(key)
+                    if len(part) <= 64:
+                        tags.add(part)
+                else:
+                    if len(part) <= 64:
+                        tags.add(part)
+        
+        # Add text content if different from title
+        text = _first(a.get("text"))
+        if text and text != title and len(text) <= 100:
+            tags.add(text)
+    
     return sorted(tags)
 
 def _stable_id(native_id: str, agency: str) -> str:
@@ -105,15 +120,18 @@ def normalise_flow(flow: Dict[str, Any]) -> Dict[str, Any]:
     annotations = flow.get("annotations") or []
     freq = _infer_freq(annotations)
     tags = _collect_tags(annotations)
+    
+    # Generate API URL using the format: http://data.api.abs.gov.au/data/{id}
+    api_url = f"http://data.api.abs.gov.au/data/{native_id}" if native_id else ""
 
     return {
         "id": _stable_id(native_id, agency),
         "title": title or "",
         "description": description or "",
         "agency": agency,
-        "collected": "",            # not present in dataflows
+        "collected": "",            # keep as empty as requested
         "freq": freq,               # inferred from annotations
-        "api_url": "",              # can be filled later when you pick endpoints
+        "api_url": api_url,
         "download_url": "",
         "tags": ";".join(tags)
     }

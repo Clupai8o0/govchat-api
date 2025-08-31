@@ -1,9 +1,4 @@
-#!/usr/bin/env python3
-# Phase 1 – Step 2.2 (CSV) for ABS SDMX dataflows
-# Usage:
-#   python normalize_abs_dataflows_csv.py --in ./test/metadata.json --out ./datasets.csv
-#   python normalize_abs_dataflows_csv.py --in ./test --out ./datasets.csv
-
+# Takes the data from the ABS API dataflows endpoint and stores the relevant data to the .csv file. 
 from __future__ import annotations
 import argparse, json, re, sys, hashlib
 from pathlib import Path

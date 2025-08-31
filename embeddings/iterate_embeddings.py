@@ -1,3 +1,4 @@
+# The existing method in retrieval.py is much more accurate. 
 import pickle
 import numpy as np
 import pandas as pd

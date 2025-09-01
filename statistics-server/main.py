@@ -22,7 +22,8 @@ app.add_middleware(
         "http://127.0.0.1:3000", 
         "https://localhost:3000",
         "https://127.0.0.1:3000",
-        "*"
+        "https://govchat-dsec.vercel.app",
+        "https://govchat-desc.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
